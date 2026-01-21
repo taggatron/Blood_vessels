@@ -246,16 +246,18 @@ const vessel = (() => {
     gLabels.appendChild(text(520, 92, kind === "artery" ? "High pressure" : (kind === "vein" ? "Low pressure" : "Exchange surface"), { weight: 700 }));
   }
 
-  // Flow dots moving in a circle
+  // Flow dots moving across the lumen (avoids implying circular wall flow)
   const flowDots = [];
   function initFlowDots(){
     clear(gFlow);
     flowDots.length = 0;
-    const baseCount = 22;
+    const baseCount = 18;
     for (let i=0;i<baseCount;i++){
       const c = circle(0,0,4,null,"rgba(255,255,255,0.0)");
       gFlow.appendChild(c);
-      flowDots.push({ el:c, phase: i / baseCount });
+      // lane is a normalized vertical offset within the lumen (-1..1)
+      const lane = (Math.random() * 2 - 1);
+      flowDots.push({ el: c, phase: i / baseCount, lane });
     }
   }
 
@@ -267,14 +269,19 @@ const vessel = (() => {
     const d = vesselData[kind];
     const cx = 280;
     const cy = 190;
+    // Approximate lumen size for the animation track.
     const radius = { artery: 84, capillary: 56, vein: 92 }[kind];
     const speed = d.flowSpeed;
     const t = (now - state.t0) / 1000;
 
+    const trackHalf = radius * 0.92;
+    const laneSpread = radius * 0.52;
+
     for (const dot of flowDots){
-      const a = (dot.phase * Math.PI * 2) + t * speed;
-      const x = cx + Math.cos(a) * radius;
-      const y = cy + Math.sin(a) * radius;
+      // Move left-to-right through the lumen (wrap).
+      const s = (dot.phase + t * (speed * 0.18)) % 1;
+      const x = (cx - trackHalf) + (s * (trackHalf * 2));
+      const y = cy + (dot.lane * laneSpread);
       dot.el.setAttribute("cx", String(x));
       dot.el.setAttribute("cy", String(y));
 
