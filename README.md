@@ -13,7 +13,16 @@ python3 -m http.server 5173
 ```
 
 Then open:
-- http://localhost:5173/web/
+- http://localhost:5173/
+
+## GitHub Pages (Option B)
+Enable GitHub Pages to serve from the repository root:
+- GitHub → Settings → Pages
+- Build and deployment → Source: **Deploy from a branch**
+- Branch: **main** / **(root)**
+
+Your URL will be:
+- https://taggatron.github.io/Blood_vessels/
 
 ## Notes
 - This is a teaching visualization (simplified model).

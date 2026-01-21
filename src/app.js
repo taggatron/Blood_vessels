@@ -658,6 +658,60 @@ const circ = (() => {
     return g;
   }
 
+  function lungsNode(x, y){
+    const g = document.createElementNS("http://www.w3.org/2000/svg","g");
+    g.setAttribute("class", "organ");
+    g.dataset.organ = "lungs";
+
+    const lobe = (cx, cy, rx, ry) => {
+      const e = document.createElementNS("http://www.w3.org/2000/svg","ellipse");
+      e.setAttribute("cx", String(cx));
+      e.setAttribute("cy", String(cy));
+      e.setAttribute("rx", String(rx));
+      e.setAttribute("ry", String(ry));
+      e.setAttribute("fill", "rgba(255,255,255,0.92)");
+      e.setAttribute("stroke", "rgba(2,6,23,0.14)");
+      e.setAttribute("stroke-width", "2");
+      return e;
+    };
+
+    // Two lobes + a simple trachea/bronchi hint.
+    const left = lobe(x - 18, y + 6, 28, 34);
+    const right = lobe(x + 18, y + 6, 28, 34);
+
+    const trachea = document.createElementNS("http://www.w3.org/2000/svg","path");
+    trachea.setAttribute(
+      "d",
+      `M ${x} ${y - 48} ` +
+      `C ${x} ${y - 24}, ${x} ${y - 10}, ${x - 10} ${y} ` +
+      `M ${x} ${y - 24} C ${x} ${y - 10}, ${x} ${y - 10}, ${x + 10} ${y}`
+    );
+    trachea.setAttribute("fill", "none");
+    trachea.setAttribute("stroke", "rgba(2,6,23,0.20)");
+    trachea.setAttribute("stroke-width", "3");
+    trachea.setAttribute("stroke-linecap", "round");
+
+    const t = document.createElementNS("http://www.w3.org/2000/svg","text");
+    t.setAttribute("x", String(x));
+    t.setAttribute("y", String(y + 54));
+    t.setAttribute("text-anchor", "middle");
+    t.setAttribute("font-weight", "700");
+    t.setAttribute("fill", "rgba(2,6,23,0.78)");
+    t.textContent = "Lungs";
+
+    g.appendChild(left);
+    g.appendChild(right);
+    g.appendChild(trachea);
+    g.appendChild(t);
+
+    g.addEventListener("click", () => {
+      state.selectedOrgan = state.selectedOrgan === "lungs" ? null : "lungs";
+      updateHighlight();
+    });
+
+    return g;
+  }
+
   function updateHighlight(){
     // Make selected organ’s capillary bed brighter
     const selected = state.selectedOrgan;
@@ -693,6 +747,9 @@ const circ = (() => {
     heartG.appendChild(heartPath);
     gVessels.appendChild(heartG);
 
+    // Lungs drawing
+    gVessels.appendChild(lungsNode(lungs.x, lungs.y));
+
     // Nodes (organs)
     const organs = [
       { id: "brain", x: 740, y: 120, name: "Brain" },
@@ -715,7 +772,8 @@ const circ = (() => {
 
     // Lungs capillary bed
     const dLungCap = `M ${lungs.x - 40} ${lungs.y + 10} C ${lungs.x - 10} ${lungs.y + 40}, ${lungs.x + 10} ${lungs.y - 20}, ${lungs.x + 40} ${lungs.y + 10}`;
-    addVisiblePath(dLungCap, "capillary");
+    const lungCapP = addVisiblePath(dLungCap, "capillary");
+    lungCapP.dataset.organ = "lungs";
 
     // Systemic: heart -> aorta -> organ arteries -> organ capillaries -> veins -> vena cava -> heart
     const aorta = `M ${heart.x + 85} ${heart.y + 10} C ${heart.x + 220} ${heart.y - 40}, 380 260, 520 250`;
