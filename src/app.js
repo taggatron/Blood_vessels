@@ -376,6 +376,18 @@ const assessment = (() => {
   const scoreLine = $("#scoreLine");
   const explain = $("#assessmentExplain");
 
+  const touchState = {
+    active: false,
+    pointerId: null,
+    srcPill: null,
+    ghost: null,
+    offsetX: 0,
+    offsetY: 0,
+    lastOverZone: null,
+  };
+
+  let pickedPill = null;
+
   const items = [
     { id: "thick_media", label: "Thick tunica media (muscle)", correct: "artery" },
     { id: "elastic_recoil", label: "Elastic recoil smooths pulse", correct: "artery" },
@@ -418,7 +430,154 @@ const assessment = (() => {
       e.dataTransfer.setData("text/plain", item.id);
       e.dataTransfer.effectAllowed = "move";
     });
+
+    // Touch/pen: custom drag. Mouse keeps native HTML5 drag.
+    div.addEventListener("pointerdown", (e) => {
+      if (e.pointerType === "mouse") return;
+      startTouchDrag(e, div);
+    });
+
+    // Tap-to-pick (mobile friendly). Clicking a zone will place it.
+    div.addEventListener("click", (e) => {
+      // If a touch drag just happened, don't treat it as a pick.
+      if (touchState.active) return;
+      e.preventDefault();
+      setPicked(div);
+    });
     return div;
+  }
+
+  function setPicked(pill){
+    if (pickedPill === pill){
+      pill.classList.remove("is-picked");
+      pickedPill = null;
+      setTapTargetsActive(false);
+      return;
+    }
+
+    if (pickedPill) pickedPill.classList.remove("is-picked");
+    pickedPill = pill;
+    pickedPill.classList.add("is-picked");
+    setTapTargetsActive(true);
+    feedback.innerHTML = `<div class="muted">Tap a dropzone to place: <strong>Artery</strong>, <strong>Capillary</strong>, or <strong>Vein</strong>. (Tap the pill again to cancel.)</div>`;
+  }
+
+  function setTapTargetsActive(isActive){
+    for (const z of $$(".dropzone")) z.classList.toggle("is-target", isActive);
+  }
+
+  function placePillInZone(pill, zone){
+    const body = $(`[data-drop-body="${zone}"]`);
+    if (body) body.appendChild(pill);
+  }
+
+  function placePillInBank(pill){
+    featureBank.appendChild(pill);
+  }
+
+  function elementAtClientPoint(x, y){
+    // Some browsers return null in rare cases (e.g., during scroll). Guard.
+    return document.elementFromPoint(x, y);
+  }
+
+  function dropTargetFromPoint(x, y){
+    const el = elementAtClientPoint(x, y);
+    if (!el) return { type: "none" };
+
+    const zone = el.closest?.(".dropzone");
+    if (zone?.dataset?.drop) return { type: "zone", zone: zone.dataset.drop, el: zone };
+
+    const bank = el.closest?.("#featureBank");
+    if (bank) return { type: "bank" };
+
+    return { type: "none" };
+  }
+
+  function updateOverZone(zoneEl){
+    if (touchState.lastOverZone && touchState.lastOverZone !== zoneEl){
+      touchState.lastOverZone.classList.remove("is-over");
+    }
+    touchState.lastOverZone = zoneEl;
+    if (zoneEl) zoneEl.classList.add("is-over");
+  }
+
+  function cleanupTouchDrag(){
+    if (touchState.lastOverZone) touchState.lastOverZone.classList.remove("is-over");
+    touchState.lastOverZone = null;
+
+    if (touchState.ghost){
+      touchState.ghost.remove();
+      touchState.ghost = null;
+    }
+    if (touchState.srcPill){
+      touchState.srcPill.classList.remove("is-drag-source");
+    }
+
+    touchState.active = false;
+    touchState.pointerId = null;
+    touchState.srcPill = null;
+  }
+
+  function startTouchDrag(e, pill){
+    // Cancel pick mode if active
+    if (pickedPill) {
+      pickedPill.classList.remove("is-picked");
+      pickedPill = null;
+      setTapTargetsActive(false);
+    }
+
+    e.preventDefault();
+    touchState.active = true;
+    touchState.pointerId = e.pointerId;
+    touchState.srcPill = pill;
+
+    const rect = pill.getBoundingClientRect();
+    touchState.offsetX = e.clientX - rect.left;
+    touchState.offsetY = e.clientY - rect.top;
+
+    const ghost = pill.cloneNode(true);
+    ghost.classList.add("pill-ghost");
+    ghost.style.width = `${rect.width}px`;
+    ghost.style.height = `${rect.height}px`;
+    document.body.appendChild(ghost);
+    touchState.ghost = ghost;
+
+    pill.classList.add("is-drag-source");
+
+    // Position once
+    moveTouchDrag(e);
+
+    try { pill.setPointerCapture(e.pointerId); } catch { /* ignore */ }
+  }
+
+  function moveTouchDrag(e){
+    if (!touchState.active || e.pointerId !== touchState.pointerId) return;
+    if (!touchState.ghost) return;
+
+    e.preventDefault();
+
+    const x = e.clientX - touchState.offsetX;
+    const y = e.clientY - touchState.offsetY;
+    touchState.ghost.style.left = `${Math.round(x)}px`;
+    touchState.ghost.style.top = `${Math.round(y)}px`;
+
+    const tgt = dropTargetFromPoint(e.clientX, e.clientY);
+    updateOverZone(tgt.type === "zone" ? tgt.el : null);
+  }
+
+  function endTouchDrag(e){
+    if (!touchState.active || e.pointerId !== touchState.pointerId) return;
+    e.preventDefault();
+
+    const tgt = dropTargetFromPoint(e.clientX, e.clientY);
+    const pill = touchState.srcPill;
+
+    if (pill){
+      if (tgt.type === "zone") placePillInZone(pill, tgt.zone);
+      else if (tgt.type === "bank") placePillInBank(pill);
+    }
+
+    cleanupTouchDrag();
   }
 
   function findItem(id){
@@ -433,6 +592,8 @@ const assessment = (() => {
     feedback.textContent = "";
     featureBank.innerHTML = "";
     for (const b of allDropBodies()) b.innerHTML = "";
+    if (pickedPill) pickedPill = null;
+    setTapTargetsActive(false);
     for (const it of items) featureBank.appendChild(makePill(it));
     updateScoreLine();
     renderExplain();
@@ -479,6 +640,37 @@ const assessment = (() => {
       const id = e.dataTransfer.getData("text/plain");
       const pill = $(`.pill[data-item-id="${CSS.escape(id)}"]`);
       if (pill) featureBank.appendChild(pill);
+    });
+  }
+
+  function setupTouchAndClickDnD(){
+    // Pointer drag listeners (document-level so we still receive events while moving)
+    document.addEventListener("pointermove", moveTouchDrag, { passive: false });
+    document.addEventListener("pointerup", endTouchDrag, { passive: false });
+    document.addEventListener("pointercancel", cleanupTouchDrag, { passive: false });
+
+    // Tap-to-place: tap a zone to drop picked pill.
+    for (const z of $$(".dropzone")){
+      z.addEventListener("click", () => {
+        if (!pickedPill) return;
+        placePillInZone(pickedPill, z.dataset.drop);
+        pickedPill.classList.remove("is-picked");
+        pickedPill = null;
+        setTapTargetsActive(false);
+        feedback.innerHTML = `<div class="muted">Placed. Pick another feature to continue.</div>`;
+      });
+    }
+
+    // Tap the bank background to return a picked pill.
+    featureBank.addEventListener("click", (e) => {
+      if (!pickedPill) return;
+      // Ignore clicks directly on pills (they toggle pick)
+      if (e.target?.closest?.(".pill")) return;
+      placePillInBank(pickedPill);
+      pickedPill.classList.remove("is-picked");
+      pickedPill = null;
+      setTapTargetsActive(false);
+      feedback.innerHTML = `<div class="muted">Returned to bank.</div>`;
     });
   }
 
@@ -540,6 +732,7 @@ const assessment = (() => {
 
   function init(){
     setupDnD();
+    setupTouchAndClickDnD();
     reset();
 
     $("#checkBtn").addEventListener("click", check);
