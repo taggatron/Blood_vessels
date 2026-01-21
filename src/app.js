@@ -111,6 +111,13 @@ const vessel = (() => {
   const toggleLayers = $("#toggleLayers");
   const toggleFlow = $("#toggleFlow");
 
+  // Pseudo-3D tube hint parameters (also used by the flow animation).
+  const TUBE_HINT = {
+    dx: -130,
+    dy: -30,
+    squash: 0.78,
+  };
+
   const state = {
     active: "artery",
     showLayers: true,
@@ -156,11 +163,95 @@ const vessel = (() => {
     return c;
   }
 
+  function ellipse(cx,cy,rx,ry,cls,fill){
+    const e = document.createElementNS("http://www.w3.org/2000/svg","ellipse");
+    e.setAttribute("cx", String(cx));
+    e.setAttribute("cy", String(cy));
+    e.setAttribute("rx", String(rx));
+    e.setAttribute("ry", String(ry));
+    if (cls) e.setAttribute("class", cls);
+    if (fill) e.setAttribute("fill", fill);
+    return e;
+  }
+
   function path(d, cls){
     const p = document.createElementNS("http://www.w3.org/2000/svg","path");
     p.setAttribute("d", d);
     if (cls) p.setAttribute("class", cls);
     return p;
+  }
+
+  function blobPathD(cx, cy, r, opts = {}){
+    const {
+      amp = 0.07,
+      bumps1 = 3,
+      bumps2 = 7,
+      phase1 = 1.2,
+      phase2 = 2.7,
+      squashY = 0.96,
+      steps = 72,
+    } = opts;
+
+    let d = "";
+    for (let i=0;i<=steps;i++){
+      const t = i / steps;
+      const a = t * Math.PI * 2;
+      const wobble = (amp * Math.sin(bumps1 * a + phase1)) + ((amp * 0.45) * Math.sin(bumps2 * a + phase2));
+      const rr = r * (1 + wobble);
+      const x = cx + Math.cos(a) * rr;
+      const y = cy + Math.sin(a) * rr * squashY;
+      d += (i === 0 ? `M ${x} ${y}` : ` L ${x} ${y}`);
+    }
+    d += " Z";
+    return d;
+  }
+
+  function fillShape(kind, cx, cy, r, fill, opts){
+    if (kind === "vein"){
+      const p = path(blobPathD(cx, cy, r, opts), null);
+      p.setAttribute("fill", fill);
+      return p;
+    }
+    return circle(cx, cy, r, null, fill);
+  }
+
+  function drawTubeHint(cx, cy, outerR, lumenR, outerFill){
+    // Subtle pseudo-3D tube extension to suggest depth (keeps a true cross-section front face).
+    // Extend to the left so it doesn't cover the right-hand labels.
+    const { dx, dy, squash } = TUBE_HINT;
+
+    // Use the left-side of the circle for the visible wall segment.
+    const a1 = (2 * Math.PI) / 3;
+    const a2 = (4 * Math.PI) / 3;
+
+    const sideQuad = (r, fill, opacity) => {
+      const fx1 = cx + Math.cos(a1) * r;
+      const fy1 = cy + Math.sin(a1) * r;
+      const fx2 = cx + Math.cos(a2) * r;
+      const fy2 = cy + Math.sin(a2) * r;
+
+      const bx1 = (cx + dx) + Math.cos(a1) * r;
+      const by1 = (cy + dy) + Math.sin(a1) * r * squash;
+      const bx2 = (cx + dx) + Math.cos(a2) * r;
+      const by2 = (cy + dy) + Math.sin(a2) * r * squash;
+
+      const p = path(`M ${fx1} ${fy1} L ${bx1} ${by1} L ${bx2} ${by2} L ${fx2} ${fy2} Z`, null);
+      p.setAttribute("fill", fill);
+      p.setAttribute("opacity", String(opacity));
+      return p;
+    };
+
+    // Outer wall hint
+    gDrawing.appendChild(sideQuad(outerR, outerFill, 0.18));
+    const backOuter = ellipse(cx + dx, cy + dy, outerR, outerR * squash, null, outerFill);
+    backOuter.setAttribute("opacity", "0.12");
+    gDrawing.appendChild(backOuter);
+
+    // Lumen hint
+    gDrawing.appendChild(sideQuad(lumenR, "rgba(10,18,40,0.55)", 0.22));
+    const backLumen = ellipse(cx + dx, cy + dy, lumenR, lumenR * squash, null, "rgba(10,18,40,0.55)");
+    backLumen.setAttribute("opacity", "0.18");
+    gDrawing.appendChild(backLumen);
   }
 
   function draw(kind){
@@ -185,14 +276,18 @@ const vessel = (() => {
     gLabels.appendChild(text(22, 40, `${d.title} cross section`, { weight: 700 }));
     gLabels.appendChild(text(22, 62, showLayers ? "Layers shown" : "Simplified wall shown", { opacity: 0.75 }));
 
-    // Outer wall
     const outerFill = kind === "artery" ? "url(#wallGrad)" : (kind === "capillary" ? "url(#wallGrad2)" : "url(#wallGrad3)");
-    gDrawing.appendChild(circle(cx, cy, geom.outer, null, outerFill));
+
+    // Pseudo-3D tube hint behind the cross section
+    drawTubeHint(cx, cy, geom.outer, geom.lumen, outerFill);
+
+    // Outer wall
+    gDrawing.appendChild(fillShape(kind, cx, cy, geom.outer, outerFill, { amp: 0.085, squashY: 0.94, phase1: 1.1, phase2: 2.4 }));
 
     // Layers (artery + vein)
     if (showLayers){
-      gDrawing.appendChild(circle(cx, cy, geom.media, null, "rgba(255,255,255,0.14)"));
-      gDrawing.appendChild(circle(cx, cy, geom.intima, null, "rgba(0,0,0,0.12)"));
+      gDrawing.appendChild(fillShape(kind, cx, cy, geom.media, "rgba(255,255,255,0.14)", { amp: 0.07, squashY: 0.955, phase1: 0.7, phase2: 3.2 }));
+      gDrawing.appendChild(fillShape(kind, cx, cy, geom.intima, "rgba(0,0,0,0.12)", { amp: 0.055, squashY: 0.965, phase1: 1.8, phase2: 1.1 }));
 
       gLabels.appendChild(text(520, 140, "Tunica externa", { opacity: 0.8 }));
       gLabels.appendChild(text(520, 190, "Tunica media", { opacity: 0.8 }));
@@ -255,8 +350,9 @@ const vessel = (() => {
     for (let i=0;i<baseCount;i++){
       const c = circle(0,0,4,null,"rgba(255,255,255,0.0)");
       gFlow.appendChild(c);
-      // lane is a normalized vertical offset within the lumen (-1..1)
-      const lane = (Math.random() * 2 - 1);
+      // lane is a normalized offset across the lumen (-1..1), biased toward the center
+      const u = (Math.random() * 2 - 1);
+      const lane = Math.sign(u) * Math.pow(Math.abs(u), 0.65);
       flowDots.push({ el: c, phase: i / baseCount, lane });
     }
   }
@@ -274,16 +370,42 @@ const vessel = (() => {
     const speed = d.flowSpeed;
     const t = (now - state.t0) / 1000;
 
-    const trackHalf = radius * 0.92;
-    const laneSpread = radius * 0.52;
+    // Animate through the pseudo-3D tube depth.
+    const lumenR = radius * 0.92;
+    const { dx, dy, squash } = TUBE_HINT;
+    const backCx = cx + dx;
+    const backCy = cy + dy;
+
+    // Axis from back -> front
+    const ax = cx - backCx;
+    const ay = cy - backCy;
+    const al = Math.max(1e-6, Math.hypot(ax, ay));
+    const ux = ax / al;
+    const uy = ay / al;
+    // Perpendicular across-lumen vector
+    const px = -uy;
+    const py = ux;
+    const laneSpread = lumenR * 0.55;
 
     for (const dot of flowDots){
-      // Move left-to-right through the lumen (wrap).
-      const s = (dot.phase + t * (speed * 0.18)) % 1;
-      const x = (cx - trackHalf) + (s * (trackHalf * 2));
-      const y = cy + (dot.lane * laneSpread);
+      // Move from the back ellipse toward the front face (wrap).
+      const s = (dot.phase + t * (speed * 0.14)) % 1;
+      const depthScale = 0.58 + (0.42 * s);
+
+      // Centerline point along the tube axis
+      const baseX = backCx + (ux * (al * s));
+      const baseY = backCy + (uy * (al * s));
+
+      // Lateral offset (compressed at the back)
+      const off = dot.lane * laneSpread * depthScale;
+      const x = baseX + (px * off);
+      // Apply additional vertical squash when nearer the back to match the ellipse
+      const y = baseY + (py * off) * (squash + (1 - squash) * s);
+
       dot.el.setAttribute("cx", String(x));
       dot.el.setAttribute("cy", String(y));
+      dot.el.setAttribute("r", String(2.8 + (2.2 * depthScale)));
+      dot.el.setAttribute("opacity", String(0.35 + (0.6 * depthScale)));
 
       const col = kind === "artery" ? "rgba(255,59,92,0.72)" : (kind === "vein" ? "rgba(58,167,255,0.68)" : "rgba(255,255,255,0.62)");
       dot.el.setAttribute("fill", col);
