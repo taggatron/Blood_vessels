@@ -1,0 +1,286 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Blood Vessels & Circulation Simulator</title>
+  <link rel="stylesheet" href="./src/styles.css" />
+</head>
+<body>
+  <header class="app-header">
+    <div class="brand">
+      <div class="brand__mark" aria-hidden="true"></div>
+      <div>
+        <h1 class="brand__title">Blood Vessels & Circulation Simulator</h1>
+        <p class="brand__subtitle">Explore arteries, capillaries, veins — then watch blood flow through the heart + loops.</p>
+      </div>
+    </div>
+
+    <nav class="tabs" role="tablist" aria-label="Simulation tabs">
+      <button class="tab" role="tab" aria-selected="true" aria-controls="panel-vessels" id="tab-vessels" data-tab="vessels">Vessels</button>
+      <button class="tab" role="tab" aria-selected="false" aria-controls="panel-assessment" id="tab-assessment" data-tab="assessment">Assessment</button>
+      <button class="tab" role="tab" aria-selected="false" aria-controls="panel-circulation" id="tab-circulation" data-tab="circulation">Circulation</button>
+      <button class="tab" role="tab" aria-selected="false" aria-controls="panel-about" id="tab-about" data-tab="about">About</button>
+    </nav>
+  </header>
+
+  <main class="app-main">
+    <!-- VESSELS -->
+    <section class="panel" role="tabpanel" id="panel-vessels" aria-labelledby="tab-vessels" data-panel="vessels">
+      <div class="grid2">
+        <div class="card">
+          <div class="card__header">
+            <h2>Vessel structure explorer</h2>
+            <p>Click a vessel type to compare wall layers, pressure, flow and key features.</p>
+          </div>
+
+          <div class="vessel-picker" aria-label="Vessel types">
+            <button class="chip is-active" data-vessel="artery">Artery</button>
+            <button class="chip" data-vessel="capillary">Capillary</button>
+            <button class="chip" data-vessel="vein">Vein</button>
+          </div>
+
+          <div class="svg-wrap" aria-label="Vessel cross section diagram">
+            <svg id="vesselSvg" viewBox="0 0 860 360" width="100%" height="360" role="img" aria-label="Vessel cross section">
+              <defs>
+                <filter id="softShadow" x="-20%" y="-20%" width="140%" height="140%">
+                  <feDropShadow dx="0" dy="6" stdDeviation="8" flood-color="#000" flood-opacity="0.22" />
+                </filter>
+                <linearGradient id="wallGrad" x1="0" x2="1">
+                  <stop offset="0" stop-color="#ffd7d7" />
+                  <stop offset="1" stop-color="#fff0f0" />
+                </linearGradient>
+                <linearGradient id="wallGrad2" x1="0" x2="1">
+                  <stop offset="0" stop-color="#d7ecff" />
+                  <stop offset="1" stop-color="#f0f8ff" />
+                </linearGradient>
+                <linearGradient id="wallGrad3" x1="0" x2="1">
+                  <stop offset="0" stop-color="#efe3ff" />
+                  <stop offset="1" stop-color="#faf5ff" />
+                </linearGradient>
+              </defs>
+
+              <!-- Labels -->
+              <g id="vesselLabels" class="svg-labels"></g>
+
+              <!-- Vessel drawing group -->
+              <g id="vesselDrawing" filter="url(#softShadow)"></g>
+
+              <!-- Tiny flow dots -->
+              <g id="vesselFlow" opacity="0.95"></g>
+            </svg>
+          </div>
+
+          <div class="hint">
+            Tip: Toggle “show layers” to see tunica intima / media / externa (arteries & veins).
+          </div>
+
+          <div class="controls-row">
+            <label class="toggle">
+              <input type="checkbox" id="toggleLayers" checked />
+              <span>Show layers</span>
+            </label>
+            <label class="toggle">
+              <input type="checkbox" id="toggleFlow" checked />
+              <span>Animate flow</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card__header">
+            <h2>What you’re looking at</h2>
+            <p id="vesselSummary" class="muted"></p>
+          </div>
+
+          <div class="stats" id="vesselStats" aria-label="Vessel properties"></div>
+
+          <div class="card__footer">
+            <button class="btn" id="compareBtn">Compare all three</button>
+            <button class="btn btn--ghost" id="resetVesselBtn">Reset view</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card card--wide">
+        <div class="card__header">
+          <h3>Quick compare</h3>
+          <p class="muted">Arteries: thick muscle + elastic recoil. Capillaries: exchange surface. Veins: low pressure + valves.</p>
+        </div>
+        <div class="table" id="compareTable" hidden></div>
+      </div>
+    </section>
+
+    <!-- ASSESSMENT -->
+    <section class="panel" role="tabpanel" id="panel-assessment" aria-labelledby="tab-assessment" data-panel="assessment" hidden>
+      <div class="grid2">
+        <div class="card">
+          <div class="card__header">
+            <h2>Drag & drop assessment</h2>
+            <p>Drag each feature into the correct vessel type. Get feedback and a score.</p>
+          </div>
+
+          <div class="assessment">
+            <div class="assessment__bank" aria-label="Draggable features">
+              <h3 class="h3">Feature bank</h3>
+              <div id="featureBank" class="pill-bank"></div>
+            </div>
+
+            <div class="assessment__targets" aria-label="Drop targets">
+              <div class="dropzone" data-drop="artery" aria-label="Artery dropzone">
+                <div class="dropzone__title">Artery</div>
+                <div class="dropzone__body" data-drop-body="artery"></div>
+              </div>
+              <div class="dropzone" data-drop="capillary" aria-label="Capillary dropzone">
+                <div class="dropzone__title">Capillary</div>
+                <div class="dropzone__body" data-drop-body="capillary"></div>
+              </div>
+              <div class="dropzone" data-drop="vein" aria-label="Vein dropzone">
+                <div class="dropzone__title">Vein</div>
+                <div class="dropzone__body" data-drop-body="vein"></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="assessment__bar">
+            <div id="scoreLine" class="score">Score: 0 / 0</div>
+            <div class="btn-row">
+              <button class="btn" id="checkBtn">Check answers</button>
+              <button class="btn btn--ghost" id="hintBtn">Hint</button>
+              <button class="btn btn--ghost" id="resetAssessmentBtn">Reset</button>
+            </div>
+          </div>
+
+          <div id="assessmentFeedback" class="feedback" aria-live="polite"></div>
+        </div>
+
+        <div class="card">
+          <div class="card__header">
+            <h2>Why the answers matter</h2>
+            <p class="muted">This connects structure to function: pressure, diffusion distance, and how blood returns to the heart.</p>
+          </div>
+          <div class="callouts" id="assessmentExplain"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- CIRCULATION -->
+    <section class="panel" role="tabpanel" id="panel-circulation" aria-labelledby="tab-circulation" data-panel="circulation" hidden>
+      <div class="grid2">
+        <div class="card">
+          <div class="card__header">
+            <h2>Heart + circulation simulation</h2>
+            <p>Watch oxygenated (red) and deoxygenated (blue) blood move through pulmonary + systemic loops and organ capillary beds.</p>
+          </div>
+
+          <div class="svg-wrap" aria-label="Circulation map">
+            <svg id="circSvg" viewBox="0 0 980 560" width="100%" height="560" role="img" aria-label="Circulation diagram">
+              <defs>
+                <filter id="softShadow2" x="-20%" y="-20%" width="140%" height="140%">
+                  <feDropShadow dx="0" dy="6" stdDeviation="8" flood-color="#000" flood-opacity="0.22" />
+                </filter>
+              </defs>
+              <rect x="18" y="18" width="944" height="524" rx="16" class="circ-frame" />
+
+              <!-- Paths used by particles (hidden) -->
+              <g id="circPaths" class="circ-paths"></g>
+
+              <!-- Visible vessels -->
+              <g id="circVessels" filter="url(#softShadow2)"></g>
+
+              <!-- Particles -->
+              <g id="circParticles"></g>
+
+              <!-- Labels -->
+              <g id="circLabels" class="circ-labels"></g>
+            </svg>
+          </div>
+
+          <div class="hint">Tip: click an organ to highlight its capillary bed.</div>
+        </div>
+
+        <div class="card">
+          <div class="card__header">
+            <h2>Controls</h2>
+            <p class="muted">These controls adjust how fast particles move (a simplified proxy for flow).</p>
+          </div>
+
+          <div class="controls">
+            <label class="control">
+              <span>Heart rate</span>
+              <input id="bpm" type="range" min="40" max="160" value="75" />
+              <span class="mono" id="bpmVal">75 bpm</span>
+            </label>
+
+            <label class="control">
+              <span>Systemic resistance</span>
+              <input id="resistance" type="range" min="0" max="100" value="35" />
+              <span class="mono" id="resVal">35%</span>
+            </label>
+
+            <label class="control">
+              <span>Particle count</span>
+              <input id="particles" type="range" min="20" max="240" value="110" />
+              <span class="mono" id="pVal">110</span>
+            </label>
+
+            <div class="controls-row">
+              <label class="toggle">
+                <input type="checkbox" id="toggleO2" checked />
+                <span>Show oxygenation colors</span>
+              </label>
+              <label class="toggle">
+                <input type="checkbox" id="toggleNames" checked />
+                <span>Show labels</span>
+              </label>
+            </div>
+
+            <div class="btn-row">
+              <button class="btn" id="restartSimBtn">Restart simulation</button>
+              <button class="btn btn--ghost" id="pauseBtn">Pause</button>
+            </div>
+          </div>
+
+          <div class="card__footer">
+            <div class="muted">Simplified model: flow speed varies with bpm and resistance; oxygenation flips in lungs and drops in organ capillary beds.</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ABOUT -->
+    <section class="panel" role="tabpanel" id="panel-about" aria-labelledby="tab-about" data-panel="about" hidden>
+      <div class="card card--wide">
+        <div class="card__header">
+          <h2>About this simulation</h2>
+          <p class="muted">
+            This is an interactive teaching simulation (not a medical device). It’s designed to help learners connect structure ↔ function.
+          </p>
+        </div>
+        <div class="about">
+          <div>
+            <h3 class="h3">What’s included</h3>
+            <ul>
+              <li>Cross-section explorer for artery, capillary, vein</li>
+              <li>Drag-and-drop assessment with scoring and hints</li>
+              <li>Animated pulmonary + systemic circulation loops with organ capillary beds</li>
+            </ul>
+          </div>
+          <div>
+            <h3 class="h3">How to run</h3>
+            <p>Open this folder in a local web server (recommended), or open the HTML file directly.</p>
+            <p class="mono">python3 -m http.server 5173</p>
+            <p class="muted">Then open: http://localhost:5173/web/</p>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="app-footer">
+    <div>Built for interactive learning. Keyboard: use Tab to navigate, Enter to activate.</div>
+  </footer>
+
+  <script defer src="./src/app.js"></script>
+</body>
+</html>
